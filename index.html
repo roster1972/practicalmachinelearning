@@ -67,33 +67,118 @@ img {
 </div>
 
 
-<pre class="r"><code>library(caret)</code></pre>
-<pre><code>## Warning: package 'caret' was built under R version 3.2.4</code></pre>
-<pre><code>## Loading required package: lattice</code></pre>
-<pre><code>## Loading required package: ggplot2</code></pre>
-<pre class="r"><code>library(randomForest)</code></pre>
-<pre><code>## Warning: package 'randomForest' was built under R version 3.2.4</code></pre>
-<pre><code>## randomForest 4.6-12</code></pre>
-<pre><code>## Type rfNews() to see new features/changes/bug fixes.</code></pre>
-<pre><code>## 
-## Attaching package: 'randomForest'</code></pre>
-<pre><code>## The following object is masked from 'package:ggplot2':
-## 
-##     margin</code></pre>
-<pre class="r"><code>library(rpart) 
-library(rpart.plot)</code></pre>
-<pre><code>## Warning: package 'rpart.plot' was built under R version 3.2.4</code></pre>
-<pre class="r"><code>trainUrl &lt;- &quot;http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv&quot;
-testUrl &lt;- &quot;http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv&quot;
+<div id="background" class="section level3">
+<h3>Background</h3>
+<p>Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <a href="http://groupware.les.inf.puc-rio.br/har" class="uri">http://groupware.les.inf.puc-rio.br/har</a> (see the section on the Weight Lifting Exercise Dataset).</p>
+</div>
+<div id="data" class="section level3">
+<h3>Data</h3>
+<p>The training data for this project are available here:</p>
+<p><a href="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv" class="uri">https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv</a></p>
+<p>The test data are available here:</p>
+<p><a href="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv" class="uri">https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv</a></p>
+<p>The data for this project come from this source: <a href="http://groupware.les.inf.puc-rio.br/har" class="uri">http://groupware.les.inf.puc-rio.br/har</a>. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.</p>
+</div>
+<div id="project-objectives" class="section level3">
+<h3>Project Objectives</h3>
+<p>The goal of your project is to predict the manner in which they did the exercise. This is the “classe” variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.</p>
+</div>
+<div id="analysis" class="section level3">
+<h3>Analysis</h3>
+<div id="load-training-data" class="section level4">
+<h4>Load Training Data</h4>
+<p>Use 70% of the training data to train the model, and use the rest for cross-validation testing.</p>
+<pre class="r"><code>library(caret)
+
+trainUrl &lt;- &quot;http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv&quot;
 
 training &lt;- read.csv(url(trainUrl), na.strings=c(&quot;NA&quot;,&quot;#DIV/0!&quot;,&quot;&quot;))
-testing &lt;- read.csv(url(testUrl), na.strings=c(&quot;NA&quot;,&quot;#DIV/0!&quot;,&quot;&quot;))
 
 inTrain &lt;- createDataPartition(y=training$classe, p=0.7, list=FALSE)
-myTraining &lt;- training[inTrain, ]; myTesting &lt;- training[-inTrain, ]
-dim(myTraining); dim(myTesting)</code></pre>
+myTraining &lt;- training[inTrain, ]
+myTesting &lt;- training[-inTrain, ]
+dim(myTraining);</code></pre>
 <pre><code>## [1] 13737   160</code></pre>
-<pre><code>## [1] 5885  160</code></pre>
+</div>
+<div id="data-cleaning-and-pre-processing" class="section level4">
+<h4>Data Cleaning and Pre-processing</h4>
+<p>To cut down on data, first eliminate data with low variability.</p>
+<pre class="r"><code>lowVar &lt;- nearZeroVar(myTraining, saveMetrics = TRUE)
+myTraining &lt;- myTraining[, !lowVar$nzv]
+dim(myTraining)</code></pre>
+<pre><code>## [1] 13737   129</code></pre>
+<p>Then eliminate any columns with more than 50% NA’s.</p>
+<pre class="r"><code>myTraining[myTraining==&quot;&quot;] &lt;- NA
+rateNa &lt;- apply(myTraining, 2, function(x) sum(is.na(x)))/nrow(myTraining)
+myTraining &lt;- myTraining[!(rateNa&gt;0.50)]
+dim(myTraining)</code></pre>
+<pre><code>## [1] 13737    59</code></pre>
+<p>Use the same columns for myTesting.</p>
+<pre class="r"><code>myTesting &lt;- myTesting[colnames(myTraining)]</code></pre>
+</div>
+</div>
+<div id="ml-prediction-with-random-forest" class="section level3">
+<h3>ML Prediction with Random Forest</h3>
+<p>Use the random forest model.</p>
+<pre class="r"><code>library(randomForest)
+
+randForstModel &lt;- randomForest(classe ~. , data=myTraining, method=&quot;class&quot;)</code></pre>
+<p>Predict the in-sample error.</p>
+<pre class="r"><code>predictions &lt;- predict(randForstModel, myTesting, type = &quot;class&quot;)</code></pre>
+<p>Test results with a confusion matrix.</p>
+<pre class="r"><code>confusionMatrix(predictions, myTesting$classe)</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 1674    0    0    0    0
+##          B    0 1139    0    0    0
+##          C    0    0 1026    0    0
+##          D    0    0    0  964    0
+##          E    0    0    0    0 1082
+## 
+## Overall Statistics
+##                                      
+##                Accuracy : 1          
+##                  95% CI : (0.9994, 1)
+##     No Information Rate : 0.2845     
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16  
+##                                      
+##                   Kappa : 1          
+##  Mcnemar's Test P-Value : NA         
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity            1.0000   1.0000   1.0000   1.0000   1.0000
+## Specificity            1.0000   1.0000   1.0000   1.0000   1.0000
+## Pos Pred Value         1.0000   1.0000   1.0000   1.0000   1.0000
+## Neg Pred Value         1.0000   1.0000   1.0000   1.0000   1.0000
+## Prevalence             0.2845   0.1935   0.1743   0.1638   0.1839
+## Detection Rate         0.2845   0.1935   0.1743   0.1638   0.1839
+## Detection Prevalence   0.2845   0.1935   0.1743   0.1638   0.1839
+## Balanced Accuracy      1.0000   1.0000   1.0000   1.0000   1.0000</code></pre>
+</div>
+<div id="predictions-for-test-data" class="section level3">
+<h3>Predictions for Test Data</h3>
+<p>Load the test data, and select the same columns as above.</p>
+<pre class="r"><code>testUrl &lt;- &quot;http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv&quot;
+
+testing &lt;- read.csv(url(testUrl), na.strings=c(&quot;NA&quot;,&quot;#DIV/0!&quot;,&quot;&quot;))
+
+testing &lt;- testing[colnames(myTraining[, -59])] # remove last column
+
+# Coerce the columns of testing to be the same as myTraining.
+testing &lt;- rbind(myTraining[2, -59], testing)
+testing &lt;- testing[-1,]</code></pre>
+<p>Apply the above model against this test data.</p>
+<pre class="r"><code>predictions2 &lt;- predict(randForstModel, testing, type = &quot;class&quot;)
+predictions2</code></pre>
+<pre><code>##  2  3  4  5 61  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 
+##  A  A  A  A  A  A  D  A  A  A  A  A  A  A  A  A  A  A  A  B 
+## Levels: A B C D E</code></pre>
+<p>These results are almost totally incorrect. I have learned almost nothing from this “class”, and have thus produced this “analysis”. Good thing I only paid $49US for it.</p>
+</div>
 
 
 </div>
